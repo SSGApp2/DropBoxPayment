@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>QR Code generate for 123</title>
+</head>
+<body>
+<h3>Secure Pay Demo - create QR for credit card, Prompt pay</h3>
+<form id="123-payment-form" action="/payment/one23/startPayRequest" method="POST" onsubmit="return false">
+    Amount:
+    <input name="amount" type="number" autocomplete="off" placeholder="Amount" value="1.00"><br/>
+    currency code:
+    <input name="currency_code" type="text" autocomplete="off"  value="THB"><br/>
+    Buyer name:
+    <input name="buyer_name" type="text" autocomplete="off"  value="SoftSquare"><br/>
+    buyer email:
+    <input name="buyer_email" type="email" autocomplete="off"  value="pongpan_p@softsquaregroup.com"><br/>
+    buyer mobile no.
+    <input name="buyer_mobile" type="text" autocomplete="off"  value="0958413125"><br/>
+    buyer lang:
+    <input name="buyer_language" type="text" autocomplete="off"  value="TH"><br/>
+    description:
+    <input name="product_description" type="text" autocomplete="off"  value="Delivery service"><br/>
+    payment info:
+    <input name="payment_info" type="text" autocomplete="off"  value="Delivery service charged"><br/>
+    <input type="button" value="Submit" onclick="sendJson()">
+</form>
+<div>
+    <h3>QR for Pay at POST wallet</h3>
+    <p id="payment-qrcode">
+        
+    </p>
+</div>
+</body>
+<script src="https://code.jquery.com/jquery-3.5.1.min.js" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
+<script>
+    function getFormData($form){
+    var unindexed_array = $form.serializeArray();
+    var indexed_array = {};
+
+    $.map(unindexed_array, function(n, i){
+        indexed_array[n['name']] = n['value'];
+    });
+
+    return indexed_array;
+    }
+    function sendJson(){
+      var $form = $('#123-payment-form');
+      var data = getFormData($form);
+      console.log('data::', data);
+      $.ajax({
+        type: "POST",
+        contentType: "application/json",
+        url:"/payment/one23/startPayRequest",
+        data: JSON.stringify(data),
+        success: formHandler,
+        dataType: "json"
+      });
+    }
+    function formHandler(data,status){
+        console.log('status: ', status);
+        
+        if(status=='success'){
+          console.log('data: ', data);
+          $('#payment-qrcode').append('<img alt="qrcode" src="data:image/png;base64,'+data.qrcode+'">')    
+        }
+    }
+    
+</script>
+</html>
