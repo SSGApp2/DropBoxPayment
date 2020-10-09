@@ -11,6 +11,7 @@
 	<groupId>com.dropbox</groupId>
 	<artifactId>payment</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
+	<packaging>war</packaging>
 	<name>payment</name>
 	<description>Dropbox Payment</description>
 
