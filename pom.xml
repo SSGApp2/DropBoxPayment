@@ -161,6 +161,11 @@
 				<enabled>false</enabled>
 			</snapshots>
 		</repository>
+		<repository>
+			<id>ext-jars</id>
+			<name>jars not in maven central</name>
+			<url>file:///${project.basedir}/libs</url>
+		</repository>
 	</repositories>
 
 </project>
