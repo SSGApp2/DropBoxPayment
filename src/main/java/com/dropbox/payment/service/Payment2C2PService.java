@@ -120,7 +120,8 @@ public class Payment2C2PService {
 
             String amount = amountFormatter.format(Float.valueOf(amt) * 100);
             ZoneId zoneId = ZoneId.of("Asia/Bangkok");
-            String paymentExpiry = ZonedDateTime.now(zoneId).plusMinutes(serviceLife).format(dtFormatter);
+//            String paymentExpiry = ZonedDateTime.now(zoneId).plusMinutes(serviceLife).format(dtFormatter);
+            String paymentExpiry = ZonedDateTime.now(zoneId).plusMinutes(5).format(dtFormatter);
             String cardholderName = "";
 
             long uniqueTransactionCode = System.currentTimeMillis();
@@ -510,7 +511,7 @@ public class Payment2C2PService {
         }
 
         String result = "";
-        Map<String, String> extractedResult = readRequestPayResponse(resString);
+        Map<String, String> extractedResult = readRequestPayResponse2(resString);
         if (!extractedResult.isEmpty()) {
             Gson gson = new Gson();
             result = gson.toJson(extractedResult);
