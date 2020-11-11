@@ -12,6 +12,7 @@ import com.google.gson.Gson;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
 import com.google.zxing.MultiFormatWriter;
+import com.google.zxing.client.j2se.MatrixToImageConfig;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
@@ -30,17 +31,18 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.configurationprocessor.json.JSONObject;
 import org.springframework.stereotype.Service;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.ResourceUtils;
 import org.xml.sax.Attributes;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
+import javax.imageio.ImageIO;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.StringReader;
-import java.io.UnsupportedEncodingException;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.time.ZoneId;
@@ -71,6 +73,11 @@ public class Payment2C2PService {
 
     @Value("${payment.2c2p.securepay-url}")
     private final String SECUREPAY_URL = "https://demo2.2c2p.com/2C2PFrontEnd/SecurePayment/Payment.aspx";
+
+    @Value("${payment.thaiqrlogo.path}")
+    private final String THAI_QR_LOGO_PATH = "classpath:thaiqrpayments.png";
+
+    private final String PROMPTPAY_QR_TYPE = "PP";
 
     private final int SERVICE_ID_SECUREPAY = 0;
 
@@ -197,7 +204,14 @@ public class Payment2C2PService {
                 String result = "";
                 Map<String, String> extractedResult = readRequestPayResponse(responseString);
                 if (!extractedResult.isEmpty()) {
-                    String qrImage = extractedResult.containsKey("qrData") ? imageToBase64(createQRImage(extractedResult.get("qrData"))) : "";
+                    String qrImage = "";
+                    if (extractedResult.containsKey("qrData")) {
+                        if (PROMPTPAY_QR_TYPE.equalsIgnoreCase(qrType)) {
+                            qrImage = imageToBase64(createQRImage(extractedResult.get("qrData"), THAI_QR_LOGO_PATH));
+                        } else {
+                            qrImage = imageToBase64(createQRImage(extractedResult.get("qrData"), ""));
+                        }
+                    }
                     extractedResult.put("qrBase64", qrImage);
                     Gson gson = new Gson();
                     result = gson.toJson(extractedResult);
@@ -484,14 +498,43 @@ public class Payment2C2PService {
         return Base64.toBase64String(imageData);
     }
 
-    private byte[] createQRImage(String qrRawData) {
+    private byte[] createQRImage(String qrRawData, String centerLogoPath) {
         try {
             //TODO QR image dimension.
             HashMap<EncodeHintType, ErrorCorrectionLevel> hintMap = new HashMap<>();
             hintMap.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.L);
             BitMatrix matrix = new MultiFormatWriter().encode(qrRawData, BarcodeFormat.QR_CODE, 1024, 1024, hintMap);
+            // Load QR image
+            BufferedImage qrImage = MatrixToImageWriter.toBufferedImage(matrix, getMatrixConfig());
+
+            // Load logo image
+            BufferedImage overlay = null;
+            if (null != centerLogoPath || !"".equalsIgnoreCase(centerLogoPath)) {
+                File overlayFile = ResourceUtils.getFile(centerLogoPath);
+                log.info(" overlay: {}",overlayFile);
+                overlay = ImageIO.read(overlayFile);
+            }
+
+            // Calculate the delta height and width between QR code and logo
+            int deltaHeight = qrImage.getHeight() - overlay.getHeight();
+            int deltaWidth = qrImage.getWidth() - overlay.getWidth();
+
+            // Initialize combined image
+            BufferedImage combined = new BufferedImage(qrImage.getHeight(), qrImage.getWidth(), BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = (Graphics2D) combined.getGraphics();
+
+            // Write QR code to new image at position 0/0
+            g.drawImage(qrImage, 0, 0, null);
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+
+            // Write logo into combine image at position (deltaWidth / 2) and
+            // (deltaHeight / 2). Background: Left/Right and Top/Bottom must be
+            // the same space for the logo to be centered
+            g.drawImage(overlay, (int) Math.round(deltaWidth / 2), (int) Math.round(deltaHeight / 2), null);
+
             ByteArrayOutputStream pngOutputStream = new ByteArrayOutputStream();
-            MatrixToImageWriter.writeToStream(matrix, "PNG", pngOutputStream);
+//            MatrixToImageWriter.writeToStream(matrix, "PNG", pngOutputStream);
+            ImageIO.write(combined, "png", pngOutputStream);
             return pngOutputStream.toByteArray();
         } catch (Exception e) {
             log.error(e.getMessage(), e);
@@ -551,6 +594,32 @@ public class Payment2C2PService {
             log.error(e.getMessage(), e);
         }
         return result;
+    }
+
+    private MatrixToImageConfig getMatrixConfig() {
+        // ARGB Colors
+        // Check Colors ENUM
+        return new MatrixToImageConfig(Colors.BLACK.getArgb(), Colors.WHITE.getArgb());
+    }
+
+    public enum Colors {
+
+        BLUE(0xFF40BAD0),
+        RED(0xFFE91C43),
+        PURPLE(0xFF8A4F9E),
+        ORANGE(0xFFF4B13D),
+        WHITE(0xFFFFFFFF),
+        BLACK(0xFF000000);
+
+        private final int argb;
+
+        Colors(final int argb) {
+            this.argb = argb;
+        }
+
+        public int getArgb() {
+            return argb;
+        }
     }
 
     //Dev
