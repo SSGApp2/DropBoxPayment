@@ -54,7 +54,7 @@ public class Payment123Service {
     //Landing page after payment
 
     @Value("${payment.2c2p.one23.notification-url}")
-    private final String ONE23_NOTIFICATION_URL = "https://e445b6359b6b.ngrok.io/payment/one23/notification";
+    private final String ONE23_NOTIFICATION_URL = "https://123d6a7505a0.ngrok.io/payment/one23/notification";
     //Payment notification URL
 
     @Value("${payment.2c2p.one23.offline-payment-url}")
@@ -95,6 +95,7 @@ public class Payment123Service {
         Double payAmount = null;
         JsonNode payloadObj = null;
 
+        log.debug(" 123 Notification URL :: {}", ONE23_NOTIFICATION_URL);
         try {
             //Parse input for validate JSON structure
             ObjectMapper mapper = new ObjectMapper();
