@@ -72,7 +72,7 @@ public class Payment2C2PService {
     private final String merchant123SecretKey = "XU7D42QYU08ZLH4MVJRMNJE27ZJO18QE";
 
     @Value("${payment.2c2p.securepay-url}")
-    private final String SECUREPAY_URL = "https://demo2.2c2p.com/2C2PFrontEnd/SecurePayment/Payment.aspx";
+    private String SECUREPAY_URL = "https://demo2.2c2p.com/2C2PFrontEnd/SecurePayment/Payment.aspx";
 
     @Value("${payment.thaiqrlogo.path}")
     private final String THAI_QR_LOGO_PATH = "classpath:thaiqrpayments.png";
@@ -90,6 +90,9 @@ public class Payment2C2PService {
     @Autowired
     SaTransPayRepository saTransPayRepository;
 
+    @Autowired
+    PaymentParameterService findByAppParameterCodeAndCode;
+
     public String twoC2PStartPayRequest(String jsonInput){
         log.debug("twoC2PStartPayRequest()");
         log.debug("json input:: {}", jsonInput);
@@ -98,6 +101,13 @@ public class Payment2C2PService {
         String payType = "";
         Double payAmount = null;
         JsonNode payloadObj = null;
+
+        String url2c2p = findByAppParameterCodeAndCode.get2C2PURL();
+        if(url2c2p != null){
+            SECUREPAY_URL = url2c2p;
+        }
+
+        log.debug(" 2c2p url (DB) :: {}", url2c2p);
 
         try {
             //Parse input for validate JSON structure

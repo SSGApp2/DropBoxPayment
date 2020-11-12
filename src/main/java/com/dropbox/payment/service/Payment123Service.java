@@ -1,11 +1,13 @@
 package com.dropbox.payment.service;
 
 import com.ccpp.PKCS7;
+import com.dropbox.payment.entity.app.ParameterDetail;
 import com.dropbox.payment.entity.app.Payment;
 import com.dropbox.payment.entity.app.SaTrans;
 import com.dropbox.payment.entity.app.SaTransPay;
 import com.dropbox.payment.repository.PaymentRepository;
 import com.dropbox.payment.repository.SaTransPayRepository;
+import com.dropbox.payment.repository.custom.ParameterDetailRepositoryCustom;
 import com.dropbox.payment.util.AppUtil;
 import com.dropbox.payment.util.PkcsUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -54,17 +56,17 @@ public class Payment123Service {
     //Landing page after payment
 
     @Value("${payment.2c2p.one23.notification-url}")
-    private final String ONE23_NOTIFICATION_URL = "https://123d6a7505a0.ngrok.io/payment/one23/notification";
+    private String ONE23_NOTIFICATION_URL = "https://123d6a7505a0.ngrok.io/payment/one23/notification";
     //Payment notification URL
 
     @Value("${payment.2c2p.one23.offline-payment-url}")
-    private final String START_OFFLINE_PAYMENT123_URL = "https://th-merchants-proxy-v1-uat-123.2c2p.com/api/merchantenc/start-offline-payment";
+    private String START_OFFLINE_PAYMENT123_URL = "https://th-merchants-proxy-v1-uat-123.2c2p.com/api/merchantenc/start-offline-payment";
 
     @Value("${payment.2c2p.one23.get-payment-status-url}")
     private final String START_OFFLINE_GET_PAYMENT123_URL = "https://th-merchants-proxy-v1-uat-123.2c2p.com/api/merchantenc/get-payment-status";
 
     @Value("${payment.2c2p.one23.cancel-payment-url}")
-    private final String START_OFFLINE_CANCEL_PAYMENT123_URL = "https://th-merchants-proxy-v1-uat-123.2c2p.com/api/merchantenc/cancel-payment";
+    private String START_OFFLINE_CANCEL_PAYMENT123_URL = "https://th-merchants-proxy-v1-uat-123.2c2p.com/api/merchantenc/cancel-payment";
 
     @Value("${payment.2c2p.merchant-secretkey}")
     private final String merchantSecretKey = "55B3A315FE7F50778512624F02EB08461BA769BCA95C9A4BB41EAE71F72FD2F6";
@@ -86,6 +88,9 @@ public class Payment123Service {
     PaymentRepository paymentRepository;
 
     @Autowired
+    PaymentParameterService findByAppParameterCodeAndCode;
+
+    @Autowired
     SaTransPayRepository saTransPayRepository;
 
     public String one23StartPayRequest(String jsonInput){
@@ -95,7 +100,18 @@ public class Payment123Service {
         Double payAmount = null;
         JsonNode payloadObj = null;
 
-        log.debug(" 123 Notification URL :: {}", ONE23_NOTIFICATION_URL);
+        String notiUrl = findByAppParameterCodeAndCode.get123NotificationURL();
+        if(notiUrl != null){
+            ONE23_NOTIFICATION_URL = notiUrl;
+        }
+
+        String url123 = findByAppParameterCodeAndCode.get123URL();
+        if(url123 != null){
+            START_OFFLINE_PAYMENT123_URL = url123+"/api/merchantenc/start-offline-payment";
+        }
+
+        log.debug(" 123 url (DB) :: {}", url123);
+        log.debug(" 123 Notification URL (DB) :: {}", notiUrl);
         try {
             //Parse input for validate JSON structure
             ObjectMapper mapper = new ObjectMapper();
@@ -279,7 +295,6 @@ public class Payment123Service {
                 .post(okhttp3.RequestBody.create(payloadJson.toString(), MEDIA_TYPE_JSON))
                 .build();
 
-        log.info("start offline pay");
         String result = "";
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
@@ -308,6 +323,13 @@ public class Payment123Service {
         String encrypted = null;
         JsonNode payloadObj = null;
         String paymentCode = "";
+
+        String url123 = findByAppParameterCodeAndCode.get123URL();
+        if(url123 != null){
+            START_OFFLINE_CANCEL_PAYMENT123_URL = url123+"/api/merchantenc/cancel-payment";
+        }
+
+        log.debug(" 123 URL (DB) :: {}", url123);
         //Test
         try {
             //Parse input for validate JSON structure
@@ -350,7 +372,7 @@ public class Payment123Service {
                 .post(okhttp3.RequestBody.create(payloadJson.toString(), MEDIA_TYPE_JSON))
                 .build();
 
-        log.info("start offline pay");
+
         String result = "";
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
