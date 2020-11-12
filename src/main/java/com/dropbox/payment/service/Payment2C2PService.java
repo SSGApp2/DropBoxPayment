@@ -507,30 +507,34 @@ public class Payment2C2PService {
             // Load QR image
             BufferedImage qrImage = MatrixToImageWriter.toBufferedImage(matrix, getMatrixConfig());
 
+            BufferedImage combined;
+
             // Load logo image
             BufferedImage overlay = null;
-            if (null != centerLogoPath || !"".equalsIgnoreCase(centerLogoPath)) {
+            if (null != centerLogoPath && !"".equalsIgnoreCase(centerLogoPath)) {
                 File overlayFile = ResourceUtils.getFile(centerLogoPath);
                 log.info(" overlay: {}",overlayFile);
                 overlay = ImageIO.read(overlayFile);
+
+                // Calculate the delta height and width between QR code and logo
+                int deltaHeight = qrImage.getHeight() - overlay.getHeight();
+                int deltaWidth = qrImage.getWidth() - overlay.getWidth();
+
+                // Initialize combined image
+                combined = new BufferedImage(qrImage.getHeight(), qrImage.getWidth(), BufferedImage.TYPE_INT_ARGB);
+                Graphics2D g = (Graphics2D) combined.getGraphics();
+
+                // Write QR code to new image at position 0/0
+                g.drawImage(qrImage, 0, 0, null);
+                g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+
+                // Write logo into combine image at position (deltaWidth / 2) and
+                // (deltaHeight / 2). Background: Left/Right and Top/Bottom must be
+                // the same space for the logo to be centered
+                g.drawImage(overlay, (int) Math.round(deltaWidth / 2), (int) Math.round(deltaHeight / 2), null);
+            } else {
+                combined = qrImage;
             }
-
-            // Calculate the delta height and width between QR code and logo
-            int deltaHeight = qrImage.getHeight() - overlay.getHeight();
-            int deltaWidth = qrImage.getWidth() - overlay.getWidth();
-
-            // Initialize combined image
-            BufferedImage combined = new BufferedImage(qrImage.getHeight(), qrImage.getWidth(), BufferedImage.TYPE_INT_ARGB);
-            Graphics2D g = (Graphics2D) combined.getGraphics();
-
-            // Write QR code to new image at position 0/0
-            g.drawImage(qrImage, 0, 0, null);
-            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
-
-            // Write logo into combine image at position (deltaWidth / 2) and
-            // (deltaHeight / 2). Background: Left/Right and Top/Bottom must be
-            // the same space for the logo to be centered
-            g.drawImage(overlay, (int) Math.round(deltaWidth / 2), (int) Math.round(deltaHeight / 2), null);
 
             ByteArrayOutputStream pngOutputStream = new ByteArrayOutputStream();
 //            MatrixToImageWriter.writeToStream(matrix, "PNG", pngOutputStream);
