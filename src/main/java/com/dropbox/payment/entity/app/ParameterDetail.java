@@ -8,18 +8,16 @@ import javax.persistence.Entity;
 import javax.persistence.FetchType;
 import javax.persistence.JoinColumn;
 import javax.persistence.ManyToOne;
-import javax.validation.constraints.NotNull;
 
 @Data
 @Entity
 @EqualsAndHashCode(of = {"id"})
 public class ParameterDetail extends BaseEntity{
-    @NotNull
+
     private String code;
 
     private String parameterDescription;
 
-    @NotNull
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "appParameter")
     private AppParameter appParameter;

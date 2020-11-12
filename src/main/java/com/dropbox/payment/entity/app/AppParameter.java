@@ -5,7 +5,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import javax.persistence.*;
-import javax.validation.constraints.NotNull;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -13,7 +12,7 @@ import java.util.Set;
 @Entity
 @EqualsAndHashCode(of = {"id"})
 public class AppParameter extends BaseEntity{
-    @NotNull
+
     @Column(unique = true)
     private String code;
 
