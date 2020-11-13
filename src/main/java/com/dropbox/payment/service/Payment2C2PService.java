@@ -522,6 +522,9 @@ public class Payment2C2PService {
             // Load logo image
             BufferedImage overlay = null;
             if (null != centerLogoPath && !"".equalsIgnoreCase(centerLogoPath)) {
+                Class cls = Class.forName("com.dropbox.payment.service.Payment2C2PService");
+                ClassLoader cLoader = cls.getClassLoader();
+//                InputStream overlayFile = cLoader.getResourceAsStream("thaiqrpayments.png");
                 File overlayFile = ResourceUtils.getFile(centerLogoPath);
                 log.info(" overlay: {}",overlayFile);
                 overlay = ImageIO.read(overlayFile);
