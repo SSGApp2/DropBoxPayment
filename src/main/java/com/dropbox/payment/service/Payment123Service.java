@@ -1,11 +1,9 @@
 package com.dropbox.payment.service;
 
 import com.ccpp.PKCS7;
-import com.dropbox.payment.entity.app.ParameterDetail;
-import com.dropbox.payment.entity.app.Payment;
-import com.dropbox.payment.entity.app.SaTrans;
-import com.dropbox.payment.entity.app.SaTransPay;
+import com.dropbox.payment.entity.app.*;
 import com.dropbox.payment.repository.PaymentRepository;
+import com.dropbox.payment.repository.PaymentTempRepository;
 import com.dropbox.payment.repository.SaTransPayRepository;
 import com.dropbox.payment.repository.custom.ParameterDetailRepositoryCustom;
 import com.dropbox.payment.util.AppUtil;
@@ -93,6 +91,9 @@ public class Payment123Service {
     @Autowired
     SaTransPayRepository saTransPayRepository;
 
+    @Autowired
+    PaymentTempRepository paymentTempRepository;
+
     public String one23StartPayRequest(String jsonInput){
         log.debug("json input:: {}", jsonInput);
         String encrypted = null;
@@ -170,14 +171,13 @@ public class Payment123Service {
             JSONObject jsonObject = new JSONObject(result);
             log.debug(" result jsonObject:: {}", jsonObject);
 
-            String paymentCode = jsonObject.getString("payment_code");
-            Payment payment = paymentRepository.findByCode(payType);
-            SaTransPay saTransPay = new SaTransPay();
-            saTransPay.setPayment(payment);
-            saTransPay.setPaymentAmt(payAmount);
-            saTransPay.setPaymentRefCode(paymentCode);
-            saTransPay.setPaymentStatus("PE");
-            saTransPayRepository.save(saTransPay);
+            String paymentRefCode = jsonObject.getString("payment_code");
+            PaymentTemp paymentTemp = new PaymentTemp();
+            paymentTemp.setPaymentAmount(payAmount);
+            paymentTemp.setPaymentRefCode(paymentRefCode);
+            paymentTemp.setPaymentStatus("Pending");
+            paymentTemp.setPaymentType("123");
+            paymentTempRepository.save(paymentTemp);
         } catch (IOException e) {
             log.error(e.getMessage(), e);
         } catch (Exception e) {
@@ -387,10 +387,10 @@ public class Payment123Service {
             }
             result = readEncrypted123(payloadObj.get("message").asText());
 
-            SaTransPay saTransPay = saTransPayRepository.findByPaymentRefCode(paymentCode);
-            if (AppUtil.isNotNull(saTransPay)){
-                saTransPay.setPaymentStatus("CA");
-                saTransPayRepository.save(saTransPay);
+            PaymentTemp paymentTemp = paymentTempRepository.findByPaymentRefCode(paymentCode);
+            if (AppUtil.isNotNull(paymentTemp)){
+                paymentTemp.setPaymentStatus("Cancelled");
+                paymentTempRepository.save(paymentTemp);
             }
         } catch (IOException e) {
             log.error(e.getMessage(), e);
@@ -434,10 +434,24 @@ public class Payment123Service {
             String merchantReference = jn.get("merchant_reference").asText();
             paymentCode = jn.get("payment_code").asText();
 
-            SaTransPay saTransPay = saTransPayRepository.findByPaymentRefCode(paymentCode);
-            if (AppUtil.isNotNull(saTransPay)){
-                saTransPay.setPaymentStatus(transactionStatus);
-                saTransPayRepository.save(saTransPay);
+            if(AppUtil.isNotEmpty(transactionStatus)){
+                String paymentStatus = "";
+                switch (transactionStatus){
+                    case "PE" : paymentStatus = "Pending"; break;
+                    case "NA" : paymentStatus = "No action (web payments)"; break;
+                    case "PA" : paymentStatus = "Paid"; break;
+                    case "PM" : paymentStatus = "Paid more"; break;
+                    case "PL" : paymentStatus = "Paid less"; break;
+                    case "EX" : paymentStatus = "Expired"; break;
+                    case "CA" : paymentStatus = "Cancelled"; break;
+                    case "FA" : paymentStatus = "Failed"; break;
+                }
+
+                PaymentTemp paymentTemp = paymentTempRepository.findByPaymentRefCode(paymentCode);
+                if(paymentTemp != null){
+                    paymentTemp.setPaymentStatus(paymentStatus);
+                    paymentTempRepository.save(paymentTemp);
+                }
             }
         } catch (JsonProcessingException e) {
             log.error(e.getMessage(), e);
@@ -476,9 +490,9 @@ public class Payment123Service {
             JSONObject jsonObject = new JSONObject(jsonInput);
             if (!jsonObject.isNull("payment_code")){
                 String paymentCode = jsonObject.getString("payment_code");
-                SaTransPay saTransPay = saTransPayRepository.findByPaymentRefCode(paymentCode);
-                if (AppUtil.isNotNull(saTransPay)){
-                    if (saTransPay.getPaymentStatus().equals("PA")){
+                PaymentTemp paymentTemp = paymentTempRepository.findByPaymentRefCode(paymentCode);
+                if (AppUtil.isNotNull(paymentTemp)){
+                    if (paymentTemp.getPaymentStatus().equals("Paid")){
                         result = "Paid";
                     } else {
                         result = "Not";
