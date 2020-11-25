@@ -1,8 +1,10 @@
 package com.dropbox.payment.service;
 
 import com.dropbox.payment.entity.app.Payment;
+import com.dropbox.payment.entity.app.PaymentTemp;
 import com.dropbox.payment.entity.app.SaTransPay;
 import com.dropbox.payment.repository.PaymentRepository;
+import com.dropbox.payment.repository.PaymentTempRepository;
 import com.dropbox.payment.repository.SaTransPayRepository;
 import com.dropbox.payment.util.AppUtil;
 import com.dropbox.payment.util.PkcsUtil;
@@ -92,6 +94,9 @@ public class Payment2C2PService {
 
     @Autowired
     PaymentParameterService findByAppParameterCodeAndCode;
+
+    @Autowired
+    PaymentTempRepository paymentTempRepository;
 
     public String twoC2PStartPayRequest(String jsonInput){
         log.debug("twoC2PStartPayRequest()");
@@ -226,14 +231,13 @@ public class Payment2C2PService {
                     Gson gson = new Gson();
                     result = gson.toJson(extractedResult);
 
-                    String paymentCode = extractedResult.get("tranRef").toString();
-                    Payment payment = paymentRepository.findByCode(payType);
-                    SaTransPay saTransPay = new SaTransPay();
-                    saTransPay.setPayment(payment);
-                    saTransPay.setPaymentAmt(payAmount);
-                    saTransPay.setPaymentRefCode(paymentCode);
-                    saTransPay.setPaymentStatus("PE");
-                    saTransPayRepository.save(saTransPay);
+                    String paymentRefCode = extractedResult.get("tranRef").toString();
+                    PaymentTemp paymentTemp = new PaymentTemp();
+                    paymentTemp.setPaymentAmount(Double.valueOf(amount));
+                    paymentTemp.setPaymentRefCode(paymentRefCode);
+                    paymentTemp.setPaymentStatus("Pending");
+                    paymentTemp.setPaymentType("2c2p");
+                    paymentTempRepository.save(paymentTemp);
                 }
 
                 return result;
@@ -578,11 +582,31 @@ public class Payment2C2PService {
 
             String paymentCode = extractedResult.get("tranRef").toString();
             String transactionStatus = extractedResult.get("status").toString();
+            if(AppUtil.isNotEmpty(transactionStatus)){
+                String paymentStatus = "";
+                switch (transactionStatus){
+                    case "A" : paymentStatus = "Approved"; break;
+                    case "PF" : paymentStatus = "Payment Failed / Authorization Failed"; break;
+                    case "AR" : paymentStatus = "Authentication Rejected(MPI Reject)"; break;
+                    case "CBR" : paymentStatus = "Corporate BIN Reject"; break;
+                    case "FF" : paymentStatus = "Fraud Rule Rejected"; break;
+                    case "ROE" : paymentStatus = "Routing Failed"; break;
+                    case "IP" : paymentStatus = "Invalid Promotion"; break;
+                    case "F" : paymentStatus = "Failed to process payment"; break;
+                    case "S" : paymentStatus = "Settled"; break;
+                    case "RF" : paymentStatus = "Refunded"; break;
+                    case "V" : paymentStatus = "Voided"; break;
+                    case "RR" : paymentStatus = "Refund Rejected"; break;
+                    case "EX" : paymentStatus = "Payment Expired"; break;
+                    case "CTS" : paymentStatus = "Tokenize Success"; break;
+                    case "CTF" : paymentStatus = "Tokenize Failed"; break;
+                }
 
-            SaTransPay saTransPay = saTransPayRepository.findByPaymentRefCode(paymentCode);
-            if (AppUtil.isNotNull(saTransPay)){
-                saTransPay.setPaymentStatus(transactionStatus);
-                saTransPayRepository.save(saTransPay);
+                PaymentTemp paymentTemp = paymentTempRepository.findByPaymentRefCode(paymentCode);
+                if(paymentTemp != null){
+                    paymentTemp.setPaymentStatus(paymentStatus);
+                    paymentTempRepository.save(paymentTemp);
+                }
             }
         }
 
@@ -598,9 +622,9 @@ public class Payment2C2PService {
             JSONObject jsonObject = new JSONObject(jsonInput);
             if (!jsonObject.isNull("payment_code")){
                 String paymentCode = jsonObject.getString("payment_code");
-                SaTransPay saTransPay = saTransPayRepository.findByPaymentRefCode(paymentCode);
-                if (AppUtil.isNotNull(saTransPay)){
-                    if (saTransPay.getPaymentStatus().equals("A")){
+                PaymentTemp paymentTemp = paymentTempRepository.findByPaymentRefCode(paymentCode);
+                if (AppUtil.isNotNull(paymentTemp)){
+                    if (paymentTemp.getPaymentStatus().equals("Approved")){
                         result = "Paid";
                     } else {
                         result = "Not";
@@ -646,10 +670,10 @@ public class Payment2C2PService {
             JSONObject jsonObject = new JSONObject(jsonInput);
             if (!jsonObject.isNull("payment_code")){
                 String paymentCode = jsonObject.getString("payment_code");
-                SaTransPay saTransPay = saTransPayRepository.findByPaymentRefCode(paymentCode);
-                if (AppUtil.isNotNull(saTransPay)){
-                    saTransPay.setPaymentStatus("A");
-                    saTransPayRepository.save(saTransPay);
+                PaymentTemp paymentTemp = paymentTempRepository.findByPaymentRefCode(paymentCode);
+                if (AppUtil.isNotNull(paymentTemp)){
+                    paymentTemp.setPaymentStatus("Approved");
+                    paymentTempRepository.save(paymentTemp);
                 }
             }
             return "Success";
