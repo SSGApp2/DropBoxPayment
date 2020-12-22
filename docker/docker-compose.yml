@@ -1,0 +1,30 @@
+version: "3.7"
+
+services:
+  payment:
+    image: docker.pkg.github.com/ssgapp2/dropboxengine/payment
+    # container_name: drop-engine
+    environment:
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_APPLICATION_JSON: '{
+        "spring.main.banner-mode":"off",
+        "server.servlet.contextPath": "/",
+        "server.port": "8080",
+        "logging.file": "/app/logs/payment.log",
+        "logging.level.root": "info",
+        "logging.level.com.dropbox.payment": "info",
+        "spring.jpa.hibernate.ddl-auto": "none", 
+        "spring.datasource.url": "jdbc:postgresql://172.16.0.145:5432/postgres?ApplicationName=klo-engine",
+        "spring.datasource.username": "test",
+        "spring.datasource.password": "test",
+        "payment.2c2p.merchant-secretkey":"55B3A315FE7F50778512624F02EB08461BA769BCA95C9A4BB41EAE71F72FD2F6",
+        "payment.2c2p.merchant-123-secretkey":"XU7D42QYU08ZLH4MVJRMNJE27ZJO18QE",
+        "payment.2c2p.redirect-payment-url":"https://demo2.2c2p.com/2C2PFrontEnd/RedirectV3/payment",
+        "payment.2c2p.securepay-url":"https://demo2.2c2p.com/2C2PFrontEnd/SecurePayment/Payment.aspx"
+      }'
+    volumes:
+      - logs_volume:/app/logs
+    # extra_hosts:
+      # - "id.slcm.dpu.ac.th:172.16.14.53"
+volumes:
+  logs_volume:

@@ -17,6 +17,9 @@
 
 	<properties>
 		<java.version>1.8</java.version>
+		<!-- change to match your machine if execute maven on Git Bash (Window)
+		<basdir.home>/c/Users/siritas_s/workspace/klo_workspace/DropBoxPayment</basdir.home>
+		-->
 	</properties>
 
 	<dependencies>
@@ -170,10 +173,33 @@
 					<target>1.8</target>
 				</configuration>
 			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-dependency-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>unpack</id>
+						<phase>package</phase>
+						<goals>
+							<goal>unpack</goal>
+						</goals>
+						<configuration>
+							<artifactItems>
+								<artifactItem>
+									<groupId>${project.groupId}</groupId>
+									<artifactId>${project.artifactId}</artifactId>
+									<version>${project.version}</version>
+									<type>war</type>
+								</artifactItem>
+							</artifactItems>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>			
 		</plugins>
 	</build>
 	<repositories>
-		<repository>
+		<!-- <repository>
 			<id>central</id>
 			<name>Central Repository</name>
 			<url>https://repo.maven.apache.org/maven2</url>
@@ -181,7 +207,7 @@
 			<snapshots>
 				<enabled>false</enabled>
 			</snapshots>
-		</repository>
+		</repository> -->
 		<repository>
 			<id>ext-jars</id>
 			<name>jars not in maven central</name>
