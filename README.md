@@ -40,3 +40,26 @@ libs/
     </repository>
 </repositories>
 ```
+
+## Build docker image
+
+```sh 
+./docker-build.sh
+```
+
+__*__ ต้อง authen กับ github registry ก่อน
+
+## Github registry authentication
+
+Read [Authenticating to GitHub Container Registry](https://docs.github.com/en/free-pro-team@latest/packages/guides/pushing-and-pulling-docker-images#authenticating-to-github-container-registry)
+
+```sh
+export CR_PAT=YOUR_TOKEN
+echo $CR_PAT | docker login docker.pkg.github.com -u USERNAME --password-stdin
+```
+
+## Push to registry
+
+```sh
+docker push docker.pkg.github.com/ssgapp2/dropboxengine/payment
+```
