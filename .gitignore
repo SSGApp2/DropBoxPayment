@@ -40,3 +40,7 @@ HRMS/*
 target/*
 /target
 .idea/*
+.classpath
+.project
+.factorypath
+.settings/
