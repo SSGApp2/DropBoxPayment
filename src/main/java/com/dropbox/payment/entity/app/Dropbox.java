@@ -36,6 +36,8 @@ public class Dropbox extends BaseEntity{
 
     private String status;
 
+    private String type;
+
     @ToString.Exclude
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "dropbox")
     private List<SaTrans> saTrans= new ArrayList<>();
