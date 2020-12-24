@@ -36,4 +36,13 @@ public class PaymentParameterService {
             return null;
         }
     }
+
+    public String getMerchantID(String dropBoxType){
+        ParameterDetail parameterDetail = parameterDetailRepositoryCustom.findByAppParameterCodeAndCode("MERCHANT_MAP",dropBoxType);
+        if (parameterDetail != null && parameterDetail.getParameterValue1() != null){
+            return parameterDetail.getParameterValue1();
+        } else {
+            return null;
+        }
+    }
 }

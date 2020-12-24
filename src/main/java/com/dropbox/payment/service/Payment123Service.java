@@ -38,7 +38,7 @@ import java.text.DecimalFormat;
 public class Payment123Service {
 
     @Value("${payment.2c2p.merchant-id}")
-    private final String MERCHANT_ID = "764764000003660";
+    private String MERCHANT_ID = "764764000003660";
 
     @Value("${payment.2c2p.one23.preferred-agent}")
     private final String ONE23_PREFERRED_AGENT = "PAYATPOST";
@@ -86,7 +86,7 @@ public class Payment123Service {
     PaymentRepository paymentRepository;
 
     @Autowired
-    PaymentParameterService findByAppParameterCodeAndCode;
+    PaymentParameterService paymentParameterService;
 
     @Autowired
     SaTransPayRepository saTransPayRepository;
@@ -101,12 +101,12 @@ public class Payment123Service {
         Double payAmount = null;
         JsonNode payloadObj = null;
 
-        String notiUrl = findByAppParameterCodeAndCode.get123NotificationURL();
+        String notiUrl = paymentParameterService.get123NotificationURL();
         if(notiUrl != null){
             ONE23_NOTIFICATION_URL = notiUrl;
         }
 
-        String url123 = findByAppParameterCodeAndCode.get123URL();
+        String url123 = paymentParameterService.get123URL();
         if(url123 != null){
             START_OFFLINE_PAYMENT123_URL = url123+"/api/merchantenc/start-offline-payment";
         }
@@ -188,10 +188,12 @@ public class Payment123Service {
 
     private JsonNode addDefaultProperties(JsonNode payloadObj) throws UnsupportedEncodingException {
         String merchantRefCode = String.valueOf(System.currentTimeMillis());
-        String checkSumString = createCheckSumFor123(merchantRefCode, payloadObj.get("amount").asText());
+        String merchantID = paymentParameterService.getMerchantID(payloadObj.get("dropbox_type").asText());
+        String checkSumString = createCheckSumFor123(merchantRefCode, payloadObj.get("amount").asText(),merchantID);
 
         //Ignore the input if existed
-        ((ObjectNode) payloadObj).put("merchant_id", MERCHANT_ID);
+
+        ((ObjectNode) payloadObj).put("merchant_id", merchantID);
         ((ObjectNode) payloadObj).put("merchant_reference", merchantRefCode);
         ((ObjectNode) payloadObj).put("preferred_agent", ONE23_PREFERRED_AGENT);
         ((ObjectNode) payloadObj).put("preferred_channel", ONE23_PREFERRED_CHANNEL);
@@ -205,7 +207,7 @@ public class Payment123Service {
         return payloadObj;
     }
 
-    private String createCheckSumFor123(String merchantRefCode, String amountText) throws UnsupportedEncodingException {
+    private String createCheckSumFor123(String merchantRefCode, String amountText,String merchantID) throws UnsupportedEncodingException {
         if (null == amountText || "".equalsIgnoreCase(amountText)) {
             throw new IllegalArgumentException("amount must not empty");
         }
@@ -213,7 +215,7 @@ public class Payment123Service {
             throw new IllegalArgumentException("Merchant RefCode must not empty");
         }
         BigDecimal amount = new BigDecimal(amountText);
-        StringBuffer str = new StringBuffer(MERCHANT_ID);
+        StringBuffer str = new StringBuffer(merchantID);
         String CURRENCY_CODE_123 = "THB";
         str.append(merchantRefCode).append(checkSumNoFormat.format(amount)).append(CURRENCY_CODE_123);
         log.debug("checkSumFor123 (plain):: {}", str.toString());
@@ -324,7 +326,7 @@ public class Payment123Service {
         JsonNode payloadObj = null;
         String paymentCode = "";
 
-        String url123 = findByAppParameterCodeAndCode.get123URL();
+        String url123 = paymentParameterService.get123URL();
         if(url123 != null){
             START_OFFLINE_CANCEL_PAYMENT123_URL = url123+"/api/merchantenc/cancel-payment";
         }
@@ -339,13 +341,14 @@ public class Payment123Service {
 
             paymentCode = payloadObj.get("payment_code").asText();
 
-            StringBuffer str = new StringBuffer(MERCHANT_ID);
+            String merchantID = payloadObj.get("dropbox_type").asText();
+            StringBuffer str = new StringBuffer(merchantID);
             str.append(paymentCode);
             log.debug("checkSumFor123 (plain):: {}", str.toString());
             String checkSumString = encodeHMAC(str.toString(), SERVICE_ID_123);
 
             //Ignore the input if existed
-            ((ObjectNode) payloadObj).put("merchant_id", MERCHANT_ID);
+            ((ObjectNode) payloadObj).put("merchant_id", merchantID);
             ((ObjectNode) payloadObj).put("payment_code", paymentCode);
             ((ObjectNode) payloadObj).put("merchant_reference", "");
             ((ObjectNode) payloadObj).put("checksum", checkSumString);
@@ -403,6 +406,7 @@ public class Payment123Service {
     public String one23Notification(String jsonInput) throws UnsupportedEncodingException {
         String responseCode = "00";
         String paymentCode = "";
+        String merchantId = "";
 
         try {
 
@@ -430,7 +434,7 @@ public class Payment123Service {
             String completedDateTime = jn.get("completed_date_time").asText();
             String amount = jn.get("amount").asText();
             String paidAmount = jn.get("paid_amount").asText();
-            String merchantId = jn.get("merchant_id").asText();
+            merchantId = jn.get("merchant_id").asText();
             String merchantReference = jn.get("merchant_reference").asText();
             paymentCode = jn.get("payment_code").asText();
 
@@ -464,12 +468,12 @@ public class Payment123Service {
         JsonObject jo = new JsonObject();
         jo.addProperty("response_code", responseCode);
         //checksum = merchantId + paymentCode + responseCode
-        jo.addProperty("checksum", createCheckSumForAcknowledge(paymentCode, responseCode));
+        jo.addProperty("checksum", createCheckSumForAcknowledge(paymentCode, responseCode,merchantId));
         log.debug(" -> noti ack message: {}", jo.toString());
         return jo.toString();
     }
 
-    private String createCheckSumForAcknowledge(String paymentCode, String responseCode) throws UnsupportedEncodingException {
+    private String createCheckSumForAcknowledge(String paymentCode, String responseCode,String merchantId) throws UnsupportedEncodingException {
         log.debug("checkSumForAcknowledge()");
         if (null == paymentCode || "".equalsIgnoreCase(paymentCode)) {
             throw new IllegalArgumentException("Payment Code is empty");
@@ -477,7 +481,7 @@ public class Payment123Service {
         if (null == responseCode || "".equalsIgnoreCase(responseCode)) {
             throw new IllegalArgumentException("Response Code is empty");
         }
-        StringBuffer str = new StringBuffer(MERCHANT_ID);
+        StringBuffer str = new StringBuffer(merchantId);
         str.append(paymentCode).append(responseCode);
         log.debug(" ACK plain msg:: {}", str.toString());
         return encodeHMAC(str.toString(), SERVICE_ID_123);

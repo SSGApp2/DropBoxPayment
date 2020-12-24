@@ -12,7 +12,6 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 
 @Slf4j
-@RequestMapping(path = "/payment")
 @RestController
 public class PaymentController {
 

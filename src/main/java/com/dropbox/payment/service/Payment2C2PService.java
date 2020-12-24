@@ -93,7 +93,7 @@ public class Payment2C2PService {
     SaTransPayRepository saTransPayRepository;
 
     @Autowired
-    PaymentParameterService findByAppParameterCodeAndCode;
+    PaymentParameterService paymentParameterService;
 
     @Autowired
     PaymentTempRepository paymentTempRepository;
@@ -107,7 +107,7 @@ public class Payment2C2PService {
         Double payAmount = null;
         JsonNode payloadObj = null;
 
-        String url2c2p = findByAppParameterCodeAndCode.get2C2PURL();
+        String url2c2p = paymentParameterService.get2C2PURL();
         if(url2c2p != null){
             SECUREPAY_URL = url2c2p;
         }
@@ -135,6 +135,7 @@ public class Payment2C2PService {
             String qrType = payloadObj.has("qr_type") ? payloadObj.get("qr_type").asText() : "";
             String desc = payloadObj.has("description") ? payloadObj.get("description").asText() : "";
             String amt = payloadObj.has("amount") ? payloadObj.get("amount").asText() : "";
+
             if ("".equalsIgnoreCase(amt)) {
                 throw new IllegalArgumentException("Amount is empty");
             }
@@ -151,13 +152,14 @@ public class Payment2C2PService {
             // Used when want to verify payload after sever response.
             String PAN_COUNTRY = "TH";
 
-            final String signatureString = new StringBuilder(SECUREPAY_VERSION).append(MERCHANT_ID)
+            String merchantID = paymentParameterService.getMerchantID(payloadObj.get("dropbox_type").asText());
+            final String signatureString = new StringBuilder(SECUREPAY_VERSION).append(merchantID)
                     .append(uniqueTransactionCode).append(desc).append(amount).append(CURRENCY_CODE).append(PAN_COUNTRY)
                     .append(cardholderName).append(encryptedCardInfo).toString();
 
             StringBuilder xml = new StringBuilder("<PaymentRequest>");
             xml.append("<merchantID>");
-            xml.append(MERCHANT_ID);
+            xml.append(merchantID);
             xml.append("</merchantID>");
             xml.append("<uniqueTransactionCode>");
             xml.append(uniqueTransactionCode);

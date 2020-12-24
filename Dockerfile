@@ -9,4 +9,4 @@ ENV TZ=Asia/Bangkok
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 ARG JAR_FILE=target/KLogistic_Payment.war
 COPY ${JAR_FILE} KLogistic_Payment.war
-ENTRYPOINT ["java","-jar","-Dserver.port=8080","-Djava.io.tmpdir=/usr/local/K-LOGISTIC/logs","-Dspring.jpa.show-sql=false","-Dspring.jpa.hibernate.ddl-auto=update","/KLogistic_Payment.war"]
+ENTRYPOINT ["java","-jar","-Dserver.port=8080","-Djava.io.tmpdir=/usr/local/K-LOGISTIC/logs","-Dspring.jpa.show-sql=false","-Dspring.jpa.hibernate.ddl-auto=validate","/KLogistic_Payment.war"]
