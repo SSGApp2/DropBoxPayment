@@ -22,7 +22,7 @@ public class SaTransDtl extends BaseEntity {
 
     private Double vatAmt;
 
-    private Integer vatRate;
+    private Double vatRate;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "saTrans")

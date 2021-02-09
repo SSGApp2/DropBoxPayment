@@ -17,7 +17,7 @@ public class SaTransPay extends BaseEntity {
 
     private Double paymentExcVat;
 
-    private Integer vatRate;
+    private Double vatRate;
 
     private Double vatAmt;
 
