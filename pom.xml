@@ -31,6 +31,8 @@
 			<groupId>th.co.123</groupId>
 			<artifactId>my2c2pPKCS7</artifactId>
 			<version>1.0</version>
+			<scope>system</scope>
+			<systemPath>${basedir}/libs/my2c2pPKCS7.jar</systemPath>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -164,6 +166,9 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<includeSystemScope>true</includeSystemScope>
+				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -208,11 +213,6 @@
 				<enabled>false</enabled>
 			</snapshots>
 		</repository> -->
-		<repository>
-			<id>ext-jars</id>
-			<name>jars not in maven central</name>
-			<url>file:///${project.basedir}/libs</url>
-		</repository>
 	</repositories>
 
 </project>
