@@ -1,9 +1,12 @@
 package com.dropbox.payment.util;
 
+import com.dropbox.payment.service.PaymentParameterService;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
+import org.springframework.stereotype.Service;
 import org.springframework.util.FileCopyUtils;
 
 import java.io.IOException;
@@ -15,20 +18,29 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 @Slf4j
 public class PkcsUtil {
 
-    private static PkcsUtil instance;
+    final String prodCode = "PROD";
 
     @Getter
     private String privateKey;
     @Getter
     private String publicKey;
 
-    private PkcsUtil() {
+    public PkcsUtil(String envMode) {
         log.info("initial keypairs");
-        //My public cert
-        //pubResource = new ClassPathResource("cert.crt");
-        //Use UAT public cert
-        Resource pubResource = new ClassPathResource("123UATSECURE16-Publickey.cer");
-        Resource privResource = new ClassPathResource("priv_base64");
+
+        String cer = "";
+        String priv = "";
+
+        if(prodCode.equals(envMode)){
+            cer = "123PRODSECURE16-Publickey.cer";
+            priv = "priv_base64_prod";
+        } else {
+            cer = "123UATSECURE16-Publickey.cer";
+            priv = "priv_base64";
+        }
+
+        Resource pubResource = new ClassPathResource(cer);
+        Resource privResource = new ClassPathResource(priv);
         if (null == privResource || null == pubResource) {
             throw new IllegalStateException("Encryption keypair not found!");
         }
@@ -45,12 +57,5 @@ public class PkcsUtil {
             log.error(e.getMessage(), e);
             throw new IllegalStateException("Encryption keypair not found!");
         }
-    }
-
-    public static PkcsUtil getInstance() {
-        if (instance == null) {
-            instance = new PkcsUtil();
-        }
-        return instance;
     }
 }

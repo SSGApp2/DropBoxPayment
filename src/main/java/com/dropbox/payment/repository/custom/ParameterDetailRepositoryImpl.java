@@ -24,4 +24,21 @@ public class ParameterDetailRepositoryImpl implements ParameterDetailRepositoryC
         criteria.add(Restrictions.eq("code", code));
         return (ParameterDetail)criteria.uniqueResult();
     }
+
+    @Override
+    public ParameterDetail findParameterMerchantByMerchantId(String merchantId,String envMode) {
+        Criteria criteria = ((Session) entityManager.getDelegate()).createCriteria(ParameterDetail.class);
+        if("PROD".equals(envMode)){
+            criteria.add(Restrictions.eq("parameterValue4", merchantId));
+        } else {
+            criteria.add(Restrictions.eq("parameterValue1", merchantId));
+        }
+
+        List<ParameterDetail> parameterDetails = criteria.list();
+        if (parameterDetails.size() > 0 ){
+            return parameterDetails.get(0);
+        } else {
+            return null;
+        }
+    }
 }
