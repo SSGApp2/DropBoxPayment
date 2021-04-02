@@ -1,5 +1,6 @@
 package com.dropbox.payment.service;
 
+import com.dropbox.payment.entity.app.ParameterDetail;
 import com.dropbox.payment.entity.app.Payment;
 import com.dropbox.payment.entity.app.PaymentTemp;
 import com.dropbox.payment.entity.app.SaTransPay;
@@ -58,9 +59,6 @@ import java.util.Map;
 @Service
 public class Payment2C2PService {
 
-    @Value("${payment.2c2p.merchant-id}")
-    private final String MERCHANT_ID = "764764000003660";
-
     @Value("${payment.2c2p.currency-code}")
     private final String CURRENCY_CODE = "764";
 
@@ -68,13 +66,6 @@ public class Payment2C2PService {
     private final String SECUREPAY_VERSION = "9.9";
 
     private final HMac hmac = new HMac(new SHA256Digest());
-    @Value("${payment.2c2p.merchant-secretkey}")
-    private final String merchantSecretKey = "55B3A315FE7F50778512624F02EB08461BA769BCA95C9A4BB41EAE71F72FD2F6";
-    @Value("${payment.2c2p.merchant-123-secretkey}")
-    private final String merchant123SecretKey = "XU7D42QYU08ZLH4MVJRMNJE27ZJO18QE";
-
-    @Value("${payment.2c2p.securepay-url}")
-    private String SECUREPAY_URL = "https://demo2.2c2p.com/2C2PFrontEnd/SecurePayment/Payment.aspx";
 
     @Value("${payment.thaiqrlogo.path}")
     private final String THAI_QR_LOGO_PATH = "classpath:thaiqrpayments.png";
@@ -98,6 +89,8 @@ public class Payment2C2PService {
     @Autowired
     PaymentTempRepository paymentTempRepository;
 
+    final String prodCode = "PROD";
+
     public String twoC2PStartPayRequest(String jsonInput){
         log.debug("twoC2PStartPayRequest()");
         log.debug("json input:: {}", jsonInput);
@@ -107,13 +100,14 @@ public class Payment2C2PService {
         Double payAmount = null;
         JsonNode payloadObj = null;
 
-        String url2c2p = paymentParameterService.get2C2PURL();
-        if(url2c2p != null){
-            SECUREPAY_URL = url2c2p;
-        }
+        String envMode = paymentParameterService.getENVConnection();
 
+        // https://demo2.2c2p.com/2c2pfrontend/securepayment/payment.aspx < --------- UAT ENV (จ่ายจริงไม่ได้)
+        // https://t.2c2p.com/SecurePayment/Payment.aspx < --------- PROD ENV (จ่ายจริงได้)
+        String url2c2p = paymentParameterService.getPaymentURL(envMode,"2C2P_URL");
         log.debug(" 2c2p url (DB) :: {}", url2c2p);
 
+        ParameterDetail merchantParameter = new ParameterDetail();
         try {
             //Parse input for validate JSON structure
             ObjectMapper mapper = new ObjectMapper();
@@ -135,6 +129,9 @@ public class Payment2C2PService {
             String qrType = payloadObj.has("qr_type") ? payloadObj.get("qr_type").asText() : "";
             String desc = payloadObj.has("description") ? payloadObj.get("description").asText() : "";
             String amt = payloadObj.has("amount") ? payloadObj.get("amount").asText() : "";
+            String dropBoxType = payloadObj.get("dropbox_type").asText();
+            log.debug(" dropBoxType :: {}", dropBoxType);
+            merchantParameter = paymentParameterService.getParameterMerchant(dropBoxType);
 
             if ("".equalsIgnoreCase(amt)) {
                 throw new IllegalArgumentException("Amount is empty");
@@ -145,14 +142,20 @@ public class Payment2C2PService {
             ZoneId zoneId = ZoneId.of("Asia/Bangkok");
             String paymentExpiry = ZonedDateTime.now(zoneId).plusMinutes(serviceLife).format(dtFormatter);
 //            String paymentExpiry = ZonedDateTime.now(zoneId).plusMinutes(5).format(dtFormatter);
-            String cardholderName = "";
+            String cardholderName = payloadObj.has("cardholder_name") ? payloadObj.get("cardholder_name").asText() : "";
 
             long uniqueTransactionCode = System.currentTimeMillis();
             // String paidAgent = "BBL";//paid_agent BAY,BBL,KTB,SCB, KBANK
             // Used when want to verify payload after sever response.
             String PAN_COUNTRY = "TH";
 
-            String merchantID = paymentParameterService.getMerchantID(payloadObj.get("dropbox_type").asText());
+            String merchantID = "";
+            if (prodCode.equals(envMode)){
+                merchantID = merchantParameter.getParameterValue4();
+            } else {
+                merchantID = merchantParameter.getParameterValue1();
+            }
+
             final String signatureString = new StringBuilder(SECUREPAY_VERSION).append(merchantID)
                     .append(uniqueTransactionCode).append(desc).append(amount).append(CURRENCY_CODE).append(PAN_COUNTRY)
                     .append(cardholderName).append(encryptedCardInfo).toString();
@@ -164,7 +167,7 @@ public class Payment2C2PService {
             xml.append("<uniqueTransactionCode>");
             xml.append(uniqueTransactionCode);
             xml.append("</uniqueTransactionCode>");
-            xml.append("<desc> ");
+            xml.append("<desc>");
             xml.append(desc);
             xml.append("</desc>");
             xml.append("<amt>");
@@ -198,19 +201,21 @@ public class Payment2C2PService {
             log.debug("xml payload:: {}", xml);
 
             String paymentPayload = Base64.toBase64String(xml.toString().getBytes(StandardCharsets.UTF_8.toString()));
-            String signature = encodeHMAC(paymentPayload, SERVICE_ID_SECUREPAY).toUpperCase();
+            String signature = encodeHMAC(paymentPayload, merchantParameter,envMode).toUpperCase();
             String payloadXML = new StringBuilder("<PaymentRequest>")
                     .append("<version>").append(SECUREPAY_VERSION).append("</version>")
                     .append("<payload>").append(paymentPayload).append("</payload>")
                     .append("<signature>").append(signature).append("</signature>")
                     .append("</PaymentRequest>").toString();
 
+            log.debug("payloadXML:: {}", payloadXML);
+
             String payload = Base64.toBase64String(payloadXML.getBytes(StandardCharsets.UTF_8.toString()));
 
             OkHttpClient client = new OkHttpClient();
             FormBody formBody = new FormBody.Builder().add("paymentRequest", payload).build();
             // Alternate payment APM
-            Request request = new Request.Builder().url(SECUREPAY_URL).post(formBody).build();
+            Request request = new Request.Builder().url(url2c2p).post(formBody).build();
             try (Response response = client.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
                     throw new IOException("Unexpected code " + response);
@@ -219,7 +224,7 @@ public class Payment2C2PService {
                 String responseString = response.body().string();
                 log.debug("<- response 1:: {}", responseString);
                 String result = "";
-                Map<String, String> extractedResult = readRequestPayResponse(responseString);
+                Map<String, String> extractedResult = readRequestPayResponse(responseString,merchantParameter,envMode);
                 if (!extractedResult.isEmpty()) {
                     String qrImage = "";
                     if (extractedResult.containsKey("qrData")) {
@@ -253,25 +258,27 @@ public class Payment2C2PService {
         }
     }
 
-    private String encodeHMAC(String message, int serviceId) throws UnsupportedEncodingException {
+    private String encodeHMAC(String message,ParameterDetail merchantParameter,String envMode) throws UnsupportedEncodingException {
         log.debug(" encodeHMAC() ");
         log.debug(" message: {}", message);
 
         byte[] resultBuffer = new byte[hmac.getMacSize()];
         byte[] plainByte = message.getBytes(StandardCharsets.UTF_8.toString());
 
-        if (0 == serviceId) {
-            hmac.init(new KeyParameter(merchantSecretKey.getBytes(StandardCharsets.UTF_8.toString())));
-        } else if (1 == serviceId) {
-            hmac.init(new KeyParameter(merchant123SecretKey.getBytes(StandardCharsets.UTF_8.toString())));
+        String merchantSecretKey = "";
+        if(prodCode.equals(envMode)){
+            merchantSecretKey = merchantParameter.getParameterValue5();
+        } else {
+            merchantSecretKey = merchantParameter.getParameterValue2();
         }
+        hmac.init(new KeyParameter(merchantSecretKey.getBytes(StandardCharsets.UTF_8.toString())));
         hmac.update(plainByte, 0, plainByte.length);
         hmac.doFinal(resultBuffer, 0);
 
         return new String(Hex.encode(resultBuffer));
     }
 
-    private Map<String, String> readRequestPayResponse(String resultString) {
+    private Map<String, String> readRequestPayResponse(String resultString,ParameterDetail merchantParameter,String envMode) {
         log.info(" readRequestPayResponse() ");
         Map<String, String> result = new HashMap<>();
         try {
@@ -291,7 +298,7 @@ public class Payment2C2PService {
                 String PAYLOAD_XMLHANDLER = "payloadResponse";
                 Map<String, String> responsePayload = readResponse(xmlReadResult.get("payload"), PAYLOAD_XMLHANDLER);
 
-                verifySecurePaySignature(xmlReadResult.get("signature"), xmlReadResult.get("payload"));
+                verifySecurePaySignature(xmlReadResult.get("signature"), xmlReadResult.get("payload"),merchantParameter,envMode);
 
                 return responsePayload;
             }
@@ -498,10 +505,10 @@ public class Payment2C2PService {
         return result;
     }
 
-    private void verifySecurePaySignature(String returnSignature, String payloadResponse) throws IllegalStateException, UnsupportedEncodingException {
+    private void verifySecurePaySignature(String returnSignature, String payloadResponse,ParameterDetail merchantParameter,String envMode) throws IllegalStateException, UnsupportedEncodingException {
         log.info(" verifySecurePaySignature() ");
         String payloadBase64 = Base64.toBase64String(payloadResponse.getBytes(StandardCharsets.UTF_8.toString()));
-        String signatureHash = encodeHMAC(payloadBase64, SERVICE_ID_SECUREPAY);
+        String signatureHash = encodeHMAC(payloadBase64, merchantParameter,envMode);
         log.debug("signature xml: {}", returnSignature);
         log.debug("signature hashed: {}", signatureHash.toUpperCase());
         if (!signatureHash.toUpperCase().equals(returnSignature)) {

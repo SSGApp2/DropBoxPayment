@@ -37,8 +37,6 @@ import java.text.DecimalFormat;
 @Service
 public class Payment123Service {
 
-    @Value("${payment.2c2p.merchant-id}")
-    private String MERCHANT_ID = "764764000003660";
 
     @Value("${payment.2c2p.one23.preferred-agent}")
     private final String ONE23_PREFERRED_AGENT = "PAYATPOST";
@@ -53,34 +51,13 @@ public class Payment123Service {
     private final String ONE23_REDIRECT_URL = "https://fea06cc1ec4b.ngrok.io/offre";
     //Landing page after payment
 
-    @Value("${payment.2c2p.one23.notification-url}")
-    private String ONE23_NOTIFICATION_URL = "https://123d6a7505a0.ngrok.io/payment/one23/notification";
-    //Payment notification URL
-
-    @Value("${payment.2c2p.one23.offline-payment-url}")
-    private String START_OFFLINE_PAYMENT123_URL = "https://th-merchants-proxy-v1-uat-123.2c2p.com/api/merchantenc/start-offline-payment";
-
-    @Value("${payment.2c2p.one23.get-payment-status-url}")
-    private final String START_OFFLINE_GET_PAYMENT123_URL = "https://th-merchants-proxy-v1-uat-123.2c2p.com/api/merchantenc/get-payment-status";
-
-    @Value("${payment.2c2p.one23.cancel-payment-url}")
-    private String START_OFFLINE_CANCEL_PAYMENT123_URL = "https://th-merchants-proxy-v1-uat-123.2c2p.com/api/merchantenc/cancel-payment";
-
-    @Value("${payment.2c2p.merchant-secretkey}")
-    private final String merchantSecretKey = "55B3A315FE7F50778512624F02EB08461BA769BCA95C9A4BB41EAE71F72FD2F6";
-
-    @Value("${payment.2c2p.merchant-123-secretkey}")
-    private final String merchant123SecretKey = "XU7D42QYU08ZLH4MVJRMNJE27ZJO18QE";
-
     final DecimalFormat checkSumNoFormat = new DecimalFormat("###,##0.00");
-
-    private final int SERVICE_ID_123 = 1;
 
     private final HMac hmac = new HMac(new SHA256Digest());
 
     final okhttp3.MediaType MEDIA_TYPE_JSON = okhttp3.MediaType.get("application/json; charset=utf-8");
 
-    final PkcsUtil pkcsUtil = PkcsUtil.getInstance();
+    final String prodCode = "PROD";
 
     @Autowired
     PaymentRepository paymentRepository;
@@ -97,22 +74,23 @@ public class Payment123Service {
     public String one23StartPayRequest(String jsonInput){
         log.debug("json input:: {}", jsonInput);
         String encrypted = null;
-        String payType = "";
+        String dropBoxType = "";
         Double payAmount = null;
         JsonNode payloadObj = null;
 
+        String envMode = paymentParameterService.getENVConnection();
         String notiUrl = paymentParameterService.get123NotificationURL();
-        if(notiUrl != null){
-            ONE23_NOTIFICATION_URL = notiUrl;
-        }
 
-        String url123 = paymentParameterService.get123URL();
-        if(url123 != null){
-            START_OFFLINE_PAYMENT123_URL = url123+"/api/merchantenc/start-offline-payment";
-        }
+        // https://th-merchants-proxy-v1-uat-123.2c2p.com < --------- UAT ENV (จ่ายจริงไม่ได้)
+        // https://mct123.2c2p.com/merchanttranslation < --------- PROD ENV (จ่ายจริงได้)
+        String url123 = paymentParameterService.getPaymentURL(envMode,"123_URL");
+        url123 += "/api/merchantenc/start-offline-payment";
 
         log.debug(" 123 url (DB) :: {}", url123);
         log.debug(" 123 Notification URL (DB) :: {}", notiUrl);
+
+        ParameterDetail merchantParameter = new ParameterDetail();
+        PkcsUtil pkcsUtil = new PkcsUtil(envMode);
         try {
             //Parse input for validate JSON structure
             ObjectMapper mapper = new ObjectMapper();
@@ -123,12 +101,10 @@ public class Payment123Service {
                 throw new IllegalArgumentException("Amount is unknown");
             }
             payAmount = payloadObj.get("amount").asDouble();
+            dropBoxType = payloadObj.get("dropbox_type").asText();
+            merchantParameter = paymentParameterService.getParameterMerchant(dropBoxType);
 
-            if (payloadObj.has("pay_type") && AppUtil.isNotNull(payloadObj.get("pay_type"))){
-                payType = payloadObj.get("pay_type").asText();
-            }
-
-            JsonNode jn = addDefaultProperties(payloadObj);
+            JsonNode jn = addDefaultProperties(payloadObj,notiUrl,merchantParameter,envMode);
 
             log.info("plain message:: {}", jn.toString());
 
@@ -146,9 +122,10 @@ public class Payment123Service {
         JsonObject payloadJson = new JsonObject();
         payloadJson.addProperty("message", encrypted);
 
+        log.info("payloadJson :: {}",payloadJson.toString());
         OkHttpClient client = new OkHttpClient();
         Request request = new Request.Builder()
-                .url(START_OFFLINE_PAYMENT123_URL)
+                .url(url123)
                 .post(okhttp3.RequestBody.create(payloadJson.toString(), MEDIA_TYPE_JSON))
                 .build();
 
@@ -165,7 +142,7 @@ public class Payment123Service {
             if (!payloadObj.hasNonNull("message")) {
                 throw new RuntimeException("no message responsed");
             }
-            result = readEncrypted123(payloadObj.get("message").asText());
+            result = readEncrypted123(payloadObj.get("message").asText(),envMode);
 
             log.debug(" result:: {}", result);
             JSONObject jsonObject = new JSONObject(result);
@@ -186,11 +163,17 @@ public class Payment123Service {
         return result;
     }
 
-    private JsonNode addDefaultProperties(JsonNode payloadObj) throws UnsupportedEncodingException {
+    private JsonNode addDefaultProperties(JsonNode payloadObj,String notiUrl,ParameterDetail merchantParameter,String envMode) throws UnsupportedEncodingException {
         String merchantRefCode = String.valueOf(System.currentTimeMillis());
-        String merchantID = paymentParameterService.getMerchantID(payloadObj.get("dropbox_type").asText());
+        String merchantID = "";
+        if (prodCode.equals(envMode)){
+            merchantID = merchantParameter.getParameterValue4();
+        } else {
+            merchantID = merchantParameter.getParameterValue1();
+        }
         String checkSumString = createCheckSumFor123(merchantRefCode, payloadObj.get("amount").asText(),merchantID);
-
+        checkSumString = encodeHMAC(checkSumString,merchantParameter,envMode);
+        log.debug(" merchantID :: {}", merchantID);
         //Ignore the input if existed
 
         ((ObjectNode) payloadObj).put("merchant_id", merchantID);
@@ -201,7 +184,7 @@ public class Payment123Service {
         ((ObjectNode) payloadObj).put("notify_buyer", true);
         ((ObjectNode) payloadObj).put("include_instructions_url", true);
         ((ObjectNode) payloadObj).put("redirect_url", ONE23_REDIRECT_URL);
-        ((ObjectNode) payloadObj).put("notification_url", ONE23_NOTIFICATION_URL);
+        ((ObjectNode) payloadObj).put("notification_url", notiUrl);
         ((ObjectNode) payloadObj).put("checksum", checkSumString);
         log.debug("addDefaultProperties (payloadObj):: {}", payloadObj);
         return payloadObj;
@@ -219,21 +202,23 @@ public class Payment123Service {
         String CURRENCY_CODE_123 = "THB";
         str.append(merchantRefCode).append(checkSumNoFormat.format(amount)).append(CURRENCY_CODE_123);
         log.debug("checkSumFor123 (plain):: {}", str.toString());
-        return encodeHMAC(str.toString(), SERVICE_ID_123);
+        return str.toString();
     }
 
-    private String encodeHMAC(String message, int serviceId) throws UnsupportedEncodingException {
+    private String encodeHMAC(String message,ParameterDetail merchantParameter,String envMode) throws UnsupportedEncodingException {
         log.debug(" encodeHMAC() ");
         log.debug(" message: {}", message);
 
         byte[] resultBuffer = new byte[hmac.getMacSize()];
         byte[] plainByte = message.getBytes(StandardCharsets.UTF_8.toString());
 
-        if (0 == serviceId) {
-            hmac.init(new KeyParameter(merchantSecretKey.getBytes(StandardCharsets.UTF_8.toString())));
-        } else if (1 == serviceId) {
-            hmac.init(new KeyParameter(merchant123SecretKey.getBytes(StandardCharsets.UTF_8.toString())));
+        String SecretKey = "";
+        if (prodCode.equals(envMode)){
+            SecretKey = merchantParameter.getParameterValue6();
+        } else {
+            SecretKey = merchantParameter.getParameterValue3();
         }
+        hmac.init(new KeyParameter(SecretKey.getBytes(StandardCharsets.UTF_8.toString())));
         hmac.update(plainByte, 0, plainByte.length);
         hmac.doFinal(resultBuffer, 0);
 
@@ -245,93 +230,27 @@ public class Payment123Service {
     @Value("${payment.2c2p.one23.bks-pass}")
     private String BKS_PASSPHRASE;
 
-    private String readEncrypted123(String encodedMessage) throws Exception {
+    private String readEncrypted123(String encodedMessage,String envMode) throws Exception {
         log.info("readEncrypted123()...");
+        PkcsUtil pkcsUtil = new PkcsUtil(envMode);
         return PKCS7.decrypt(pkcsUtil.getPrivateKey(), PRIVATEKEY_PASSPHRASE, Base64.decode(encodedMessage.getBytes()), BKS_PASSPHRASE);
     }
 
-    public String one23GetStatus(String jsonInput){
-        log.info(" -> offlineGetStatus() ->");
-        log.debug("json input:: {}", jsonInput);
-        String encrypted = null;
-        JsonNode payloadObj = null;
-        //Test
-        try {
-            //Parse input for validate JSON structure
-            ObjectMapper mapper = new ObjectMapper();
-            payloadObj = mapper.readTree(jsonInput);
-            log.debug(" parsed payload {}", payloadObj);
-
-            String paymentCode = payloadObj.get("payment_code").asText();
-
-            StringBuffer str = new StringBuffer(MERCHANT_ID);
-            str.append(paymentCode);
-            log.debug("checkSumFor123 (plain):: {}", str.toString());
-            String checkSumString = encodeHMAC(str.toString(), SERVICE_ID_123);
-
-            //Ignore the input if existed
-            ((ObjectNode) payloadObj).put("merchant_id", MERCHANT_ID);
-            ((ObjectNode) payloadObj).put("payment_code", paymentCode);
-            ((ObjectNode) payloadObj).put("merchant_reference", "");
-            ((ObjectNode) payloadObj).put("checksum", checkSumString);
-
-            log.info("plain message:: {}", payloadObj.toString());
-
-            encrypted = PKCS7.encrypt(pkcsUtil.getPublicKey(), payloadObj.toString().getBytes());
-
-            log.info("enc message:: {}", encrypted);
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-        }
-
-        if (null == encrypted) {
-            throw new IllegalStateException("No Keypairs");
-        }
-
-        JsonObject payloadJson = new JsonObject();
-        payloadJson.addProperty("message", encrypted);
-
-        OkHttpClient client = new OkHttpClient();
-        Request request = new Request.Builder()
-                .url(START_OFFLINE_GET_PAYMENT123_URL)
-                .post(okhttp3.RequestBody.create(payloadJson.toString(), MEDIA_TYPE_JSON))
-                .build();
-
-        String result = "";
-        try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
-            String body = response.body().string();
-
-            ObjectMapper mapper = new ObjectMapper();
-            payloadObj = mapper.readTree(body);
-            log.debug(" response content:: {}", payloadObj);
-
-            if (!payloadObj.hasNonNull("message")) {
-                throw new RuntimeException("no message responsed");
-            }
-            result = readEncrypted123(payloadObj.get("message").asText());
-
-        } catch (IOException e) {
-            log.error(e.getMessage(), e);
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-        }
-        return result;
-    }
-
     public String one23CancelPayment(String jsonInput){
-        log.info(" -> offlineGetStatus() ->");
+        log.info(" -> one23CancelPayment() ->");
         log.debug("json input:: {}", jsonInput);
         String encrypted = null;
         JsonNode payloadObj = null;
         String paymentCode = "";
+        String dropBoxType = "";
 
-        String url123 = paymentParameterService.get123URL();
-        if(url123 != null){
-            START_OFFLINE_CANCEL_PAYMENT123_URL = url123+"/api/merchantenc/cancel-payment";
-        }
+        String envMode = paymentParameterService.getENVConnection();
+        String url123 = paymentParameterService.get123URL(envMode);
+        url123+="/api/merchantenc/cancel-payment";
 
         log.debug(" 123 URL (DB) :: {}", url123);
+        ParameterDetail merchantParameter = new ParameterDetail();
+        PkcsUtil pkcsUtil = new PkcsUtil(envMode);
         //Test
         try {
             //Parse input for validate JSON structure
@@ -340,12 +259,18 @@ public class Payment123Service {
             log.debug(" parsed payload {}", payloadObj);
 
             paymentCode = payloadObj.get("payment_code").asText();
-
-            String merchantID = payloadObj.get("dropbox_type").asText();
+            dropBoxType = payloadObj.get("dropbox_type").asText();
+            merchantParameter = paymentParameterService.getParameterMerchant(dropBoxType);
+            String merchantID = "";
+            if(prodCode.equals(envMode)){
+                merchantID = merchantParameter.getParameterValue4();
+            } else {
+                merchantID = merchantParameter.getParameterValue1();
+            }
             StringBuffer str = new StringBuffer(merchantID);
             str.append(paymentCode);
             log.debug("checkSumFor123 (plain):: {}", str.toString());
-            String checkSumString = encodeHMAC(str.toString(), SERVICE_ID_123);
+            String checkSumString = encodeHMAC(str.toString(),merchantParameter,envMode);
 
             //Ignore the input if existed
             ((ObjectNode) payloadObj).put("merchant_id", merchantID);
@@ -371,7 +296,7 @@ public class Payment123Service {
 
         OkHttpClient client = new OkHttpClient();
         Request request = new Request.Builder()
-                .url(START_OFFLINE_CANCEL_PAYMENT123_URL)
+                .url(url123)
                 .post(okhttp3.RequestBody.create(payloadJson.toString(), MEDIA_TYPE_JSON))
                 .build();
 
@@ -388,7 +313,7 @@ public class Payment123Service {
             if (!payloadObj.hasNonNull("message")) {
                 throw new RuntimeException("no message responsed");
             }
-            result = readEncrypted123(payloadObj.get("message").asText());
+            result = readEncrypted123(payloadObj.get("message").asText(),envMode);
 
             PaymentTemp paymentTemp = paymentTempRepository.findByPaymentRefCode(paymentCode);
             if (AppUtil.isNotNull(paymentTemp)){
@@ -408,13 +333,14 @@ public class Payment123Service {
         String paymentCode = "";
         String merchantId = "";
 
+        String envMode = paymentParameterService.getENVConnection();
         try {
 
             ObjectMapper mapper = new ObjectMapper();
             JsonNode jn = mapper.readTree(jsonInput);
             String responseJson = jn.get("message").asText();
             log.debug("jn message :: {}",responseJson);
-            String data = readEncrypted123(responseJson);
+            String data = readEncrypted123(responseJson,envMode);
 
             //TODO Test; occurred when we got notification json. mocked data after decrypted
 //            String data = jsonInput;
@@ -481,10 +407,13 @@ public class Payment123Service {
         if (null == responseCode || "".equalsIgnoreCase(responseCode)) {
             throw new IllegalArgumentException("Response Code is empty");
         }
+
+        String envMode = paymentParameterService.getENVConnection();
+        ParameterDetail merchantParameter = paymentParameterService.findParameterMerchantByMerchantId(merchantId,envMode);
         StringBuffer str = new StringBuffer(merchantId);
         str.append(paymentCode).append(responseCode);
         log.debug(" ACK plain msg:: {}", str.toString());
-        return encodeHMAC(str.toString(), SERVICE_ID_123);
+        return encodeHMAC(str.toString(), merchantParameter,envMode);
     }
 
     public String one23GetInternalStatus(String jsonInput){
