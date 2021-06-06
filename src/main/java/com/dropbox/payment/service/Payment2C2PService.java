@@ -240,7 +240,7 @@ public class Payment2C2PService {
 
                     String paymentRefCode = extractedResult.get("tranRef").toString();
                     PaymentTemp paymentTemp = new PaymentTemp();
-                    paymentTemp.setPaymentAmount(Double.valueOf(amount));
+                    paymentTemp.setPaymentAmount(Double.valueOf(amt));
                     paymentTemp.setPaymentRefCode(paymentRefCode);
                     paymentTemp.setPaymentStatus("Pending");
                     paymentTemp.setPaymentType("2c2p");
